@@ -31,3 +31,9 @@ Thumbs.db
 # 临时文件
 *.tmp
 *.temp
+
+# 敏感文件 - 签名证书
+*.keystore
+*.jks
+签名证书信息*.md
+*签名证书*.md
