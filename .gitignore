@@ -32,8 +32,11 @@ Thumbs.db
 *.tmp
 *.temp
 
-# 敏感文件 - 签名证书
+# 签名证书（绝对不能提交到Git！）
 *.keystore
 *.jks
-签名证书信息*.md
-*签名证书*.md
+
+# 发布包
+release/
+*.apk
+
