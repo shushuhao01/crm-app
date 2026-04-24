@@ -1,0 +1,29 @@
+{
+    "version" : "1",
+    "prompt" : "template",
+    "title" : "服务协议和隐私政策",
+    "message" : "　　请你务必审慎阅读、充分理解《用户服务协议》和《隐私政策》各条款。<br/><br/>　　为了向你提供电话外呼、通话录音、设备绑定等服务，我们需要收集你的设备信息、通话记录、录音文件等个人信息。<br/><br/>　　你可在登录页面点击查阅完整的《用户服务协议》和《隐私政策》。如果你同意，请点击下方绿色的\"同意并继续\"按钮。",
+    "buttonAccept" : "同意并继续",
+    "buttonRefuse" : "暂不使用",
+    "hrefLoader" : "none",
+    "backToExit" : "true",
+    "second" : {
+        "title" : "确认提示",
+        "message" : "　　进入应用前，你需先同意《用户服务协议》和《隐私政策》，否则将退出应用。",
+        "buttonAccept" : "同意并继续",
+        "buttonRefuse" : "退出应用"
+    },
+    "styles" : {
+        "backgroundColor" : "#ffffff",
+        "borderRadius" : "5px",
+        "title" : {
+            "color" : "#333333"
+        },
+        "buttonAccept" : {
+            "color" : "#34D399"
+        },
+        "buttonRefuse" : {
+            "color" : "#999999"
+        }
+    }
+}

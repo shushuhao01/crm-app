@@ -1,0 +1,1502 @@
+/* 页眉: 云客CRM外呼助手软件 V1.0.0 */
+/* 源代码鉴别材料 - 前30页 (第1-30页) */
+
+// ------------------------------------------------------------
+// 文件: src/main.ts
+// ------------------------------------------------------------
+import { createSSRApp } from 'vue'
+import { createPinia } from 'pinia'
+import App from './App.vue'
+
+export function createApp() {
+  const app = createSSRApp(App)
+  const pinia = createPinia()
+  app.use(pinia)
+  return {
+    app,
+    pinia
+  }
+}
+
+
+// ------------------------------------------------------------
+// 文件: src/App.vue
+// ------------------------------------------------------------
+<script setup lang="ts">
+import { onLaunch, onShow, onHide, onError } from '@dcloudio/uni-app'
+import { useServerStore } from '@/stores/server'
+import { useUserStore } from '@/stores/user'
+
+onLaunch(() => {
+  console.log('App Launch')
+  // 恢复本地存储的配置
+  const serverStore = useServerStore()
+  const userStore = useUserStore()
+  serverStore.restoreFromStorage()
+  userStore.restore()
+
+  // #ifdef APP-PLUS
+  // 监听系统通话状态变化
+  setupCallStateListener()
+  // 设置Android返回键处理
+  setupBackButtonHandler()
+  // #endif
+})
+
+onShow(() => {
+  console.log('App Show')
+  // 检查是否有未完成的通话需要登记
+  checkPendingCall()
+})
+
+onHide(() => {
+  console.log('App Hide')
+})
+
+// 全局错误处理
+onError((err) => {
+  console.error('[App] 全局错误:', err)
+})
+
+// 检查是否有未完成的通话
+const checkPendingCall = () => {
+  const currentCall = uni.getStorageSync('currentCall')
+  if (currentCall && currentCall.callId) {
+    console.log('[App] 发现未完成的通话:', currentCall.callId)
+
+    // 检查当前页面，避免重复跳转
+    const pages = getCurrentPages()
+    const currentPage = pages[pages.length - 1]
+    const currentRoute = currentPage?.route || ''
+
+    // 如果已经在通话结束页面，不重复跳转
+    if (currentRoute.includes('call-ended')) {
+      console.log('[App] 已在通话结束页面，跳过')
+      return
+    }
+
+    // 计算通话时长
+    const startTime = new Date(currentCall.startTime).getTime()
+    const duration = Math.floor((Date.now() - startTime) / 1000)
+
+    // 清除当前通话记录，避免重复弹出
+    uni.removeStorageSync('currentCall')
+
+    // 跳转到登记页面
+    setTimeout(() => {
+      uni.navigateTo({
+        url: `/pages/call-ended/index?callId=${currentCall.callId}&name=${encodeURIComponent(currentCall.customerName || '')}&customerId=${currentCall.customerId || ''}&duration=${duration}&hasRecording=false`,
+        fail: (err) => {
+          console.error('[App] 跳转失败:', err)
+          // 如果跳转失败，恢复通话记录
+          uni.setStorageSync('currentCall', currentCall)
+        }
+      })
+    }, 500)
+  }
+}
+
+// #ifdef APP-PLUS
+// 设置通话状态监听器
+const setupCallStateListener = () => {
+  // 监听应用从后台返回前台
+  // @ts-expect-error - plus.globalEvent 在运行时存在
+  plus.globalEvent.addEventListener('resume', () => {
+    console.log('[App] 应用从后台返回')
+    // 延迟检查，等待系统通话界面完全关闭
+    setTimeout(() => {
+      checkPendingCall()
+    }, 1000)
+  })
+}
+
+// 设置Android返回键处理（防止误触退出）
+const setupBackButtonHandler = () => {
+  let lastBackTime = 0
+  plus.key.addEventListener('backbutton', () => {
+    const pages = getCurrentPages()
+    if (pages.length > 1) {
+      // 有页面栈，正常返回
+      uni.navigateBack({})
+    } else {
+      // 最后一页，双击退出
+      const now = Date.now()
+      if (now - lastBackTime < 2000) {
+        plus.runtime.quit()
+      } else {
+        lastBackTime = now
+        uni.showToast({
+          title: '再按一次退出应用',
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    }
+  })
+}
+// #endif
+</script>
+
+<style lang="scss">
+/* 全局样式 */
+page {
+  background-color: #f5f5f5;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* 禁止水平滚动 */
+html, body, #app {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* 通用类 */
+.flex-row {
+  display: flex;
+  flex-direction: row;
+}
+
+.flex-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.flex-1 {
+  flex: 1;
+}
+
+/* 安全区域 */
+.safe-area-bottom {
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+</style>
+
+
+// ------------------------------------------------------------
+// 文件: src/config/app.ts
+// ------------------------------------------------------------
+/**
+ * APP 应用配置常量
+ * 统一管理版本号、应用信息等，避免硬编码分散在各处
+ */
+
+/** 应用版本号 - 修改版本时只需改这一处 */
+export const APP_VERSION = '1.0.0'
+
+/** 应用版本码（用于安卓 versionCode，每次发版递增） */
+export const APP_VERSION_CODE = 100
+
+/** 应用名称 */
+export const APP_NAME = 'CRM外呼助手'
+
+/** 应用标语 */
+export const APP_SLOGAN = '高效外呼 · 智能管理'
+
+/** 应用包名（Android） */
+export const APP_PACKAGE_NAME = 'com.xianhu.crm.dialer'
+
+/** 公司名称 */
+export const COMPANY_NAME = '广州仙狐网络科技有限公司'
+
+/** 客服电话 */
+export const SERVICE_PHONE = '13570727234'
+
+/** 客服邮箱 */
+export const SERVICE_EMAIL = 'xianhuquwang@163.com'
+
+/** 客服微信 */
+export const SERVICE_WECHAT = 'nxys789'
+
+
+// ------------------------------------------------------------
+// 文件: src/api/auth.ts
+// ------------------------------------------------------------
+import { request } from '@/utils/request'
+import type { UserInfo, DeviceInfo } from '@/stores/user'
+
+// 登录响应
+interface LoginResponse {
+  token: string
+  expiresIn: number
+  user: UserInfo
+}
+
+// APP登录
+export const login = (data: {
+  username: string
+  password: string
+  deviceInfo?: Partial<DeviceInfo>
+}): Promise<LoginResponse> => {
+  return request({
+    url: '/mobile/login',
+    method: 'POST',
+    data,
+    showLoading: true,
+    loadingText: '登录中...'
+  })
+}
+
+// 绑定设备响应
+interface BindResponse {
+  deviceId: string
+  userId: string
+  wsToken: string
+  wsUrl: string
+}
+
+// 扫码绑定设备
+export const bindDevice = (data: {
+  bindToken: string
+  phoneNumber?: string
+  deviceInfo: DeviceInfo
+}): Promise<BindResponse> => {
+  return request({
+    url: '/mobile/bind',
+    method: 'POST',
+    data,
+    showLoading: true,
+    loadingText: '绑定中...'
+  })
+}
+
+// 解绑设备
+export const unbindDevice = (deviceId?: string): Promise<void> => {
+  return request({
+    url: '/mobile/unbind',
+    method: 'DELETE',
+    data: { deviceId },
+    showLoading: true,
+    loadingText: '解绑中...'
+  })
+}
+
+// 获取设备状态
+interface DeviceStatus {
+  bound: boolean
+  device: {
+    id: number
+    phoneNumber: string
+    deviceId: string
+    deviceName: string
+    deviceModel: string
+    osType: string
+    osVersion: string
+    appVersion: string
+    onlineStatus: string
+    lastActiveAt: string
+    bindTime: string
+  } | null
+}
+
+export const getDeviceStatus = (): Promise<DeviceStatus> => {
+  return request({
+    url: '/mobile/device/status',
+    method: 'GET',
+    showLoading: false
+  })
+}
+
+
+// ------------------------------------------------------------
+// 文件: src/api/call.ts
+// ------------------------------------------------------------
+import { request, uploadFile } from '@/utils/request'
+
+// 上报通话状态
+export const reportCallStatus = (data: {
+  callId: string
+  status: 'dialing' | 'ringing' | 'connected' | 'ended' | 'missed' | 'rejected'
+  timestamp?: string
+}): Promise<void> => {
+  return request({
+    url: '/mobile/call/status',
+    method: 'POST',
+    data: {
+      ...data,
+      timestamp: data.timestamp || new Date().toISOString()
+    },
+    showLoading: false
+  })
+}
+
+// 上报通话结束
+export const reportCallEnd = (data: {
+  callId: string
+  status: 'connected' | 'missed' | 'rejected' | 'busy' | 'failed'
+  startTime?: string
+  endTime: string
+  duration: number
+  hasRecording: boolean
+}): Promise<{ callId: string; recordingUploadUrl: string }> => {
+  return request({
+    url: '/mobile/call/end',
+    method: 'POST',
+    data,
+    showLoading: false
+  })
+}
+
+// 上传录音文件
+export const uploadRecording = (callId: string, filePath: string): Promise<{
+  recordingUrl: string
+  fileSize: number
+}> => {
+  return uploadFile({
+    url: '/mobile/recording/upload',
+    filePath,
+    name: 'file',
+    formData: { callId }
+  })
+}
+
+// 提交通话跟进记录
+export const submitCallFollowup = (data: {
+  callId: string
+  notes?: string
+  tags?: string[]
+  intention?: 'high' | 'medium' | 'low' | 'none'
+  followUpRequired?: boolean
+  nextFollowUpDate?: string
+  customerId?: string
+}): Promise<{ callId: string; customerId: string; synced: boolean }> => {
+  return request({
+    url: '/mobile/call/followup',
+    method: 'POST',
+    data,
+    showLoading: true,
+    loadingText: '保存中...'
+  })
+}
+
+// 通话记录
+export interface CallRecord {
+  id: string
+  customerId?: string
+  customerName?: string
+  customerPhone: string
+  callType: 'inbound' | 'outbound'
+  callStatus: 'connected' | 'missed' | 'busy' | 'failed' | 'rejected'
+  startTime: string
+  duration: number
+  hasRecording: boolean
+  notes?: string
+  callTags?: string[]
+}
+
+// 获取通话记录列表
+export const getCallList = (params: {
+  page?: number
+  pageSize?: number
+  callType?: 'inbound' | 'outbound'
+  startDate?: string
+  endDate?: string
+}): Promise<{
+  records: CallRecord[]
+  total: number
+  page: number
+  pageSize: number
+}> => {
+  return request({
+    url: '/mobile/calls',
+    method: 'GET',
+    data: params,
+    showLoading: false
+  })
+}
+
+// 通话详情
+export interface CallDetail extends CallRecord {
+  customerLevel?: string
+  customerTags?: string[]
+  followStatus?: string
+  endTime?: string
+  recordingUrl?: string
+  followUpRequired?: boolean
+  userId?: string
+  userName?: string
+  createdAt?: string
+  followUpRecords?: Array<{
+    id: string
+    content: string
+    intention?: string
+    nextFollowUpDate?: string
+    userName: string
+    createdAt: string
+  }>
+}
+
+// 获取通话详情
+export const getCallDetail = (callId: string): Promise<CallDetail> => {
+  return request({
+    url: `/mobile/call/${callId}`,
+    method: 'GET',
+    showLoading: true
+  })
+}
+
+// 今日统计
+export interface TodayStats {
+  totalCalls: number
+  connectedCalls: number
+  missedCalls: number
+  inboundCalls: number
+  outboundCalls: number
+  totalDuration: number
+  avgDuration: number
+  connectRate: number
+}
+
+// 获取今日统计
+export const getTodayStats = (): Promise<TodayStats> => {
+  return request({
+    url: '/mobile/stats/today',
+    method: 'GET',
+    showLoading: false
+  })
+}
+
+// 获取统计（支持时间范围）
+export const getStats = (period: 'today' | 'week' | 'month' = 'today'): Promise<TodayStats> => {
+  return request({
+    url: '/mobile/stats',
+    method: 'GET',
+    data: { period },
+    showLoading: false
+  })
+}
+
+
+// ------------------------------------------------------------
+// 文件: src/services/websocket.ts
+// ------------------------------------------------------------
+/**
+ * WebSocket 服务
+ * 用于与服务器保持实时通信，接收拨号指令等
+ */
+import { useUserStore } from '@/stores/user'
+import { useServerStore } from '@/stores/server'
+import { callStateService } from './callStateService'
+import { APP_VERSION } from '@/config/app'
+
+// 消息类型
+export interface WsMessage {
+  type: string
+  messageId?: string
+  timestamp?: number
+  data?: any
+}
+
+// 拨号请求
+export interface DialRequest {
+  callId: string
+  phoneNumber: string
+  customerName?: string
+  customerId?: string
+  source: string
+  operatorId?: string
+  operatorName?: string
+}
+
+class WebSocketService {
+  private socket: UniApp.SocketTask | null = null
+  private reconnectAttempts = 0
+  private maxReconnectAttempts = 10
+  private reconnectDelay = 3000
+  private heartbeatTimer: number | null = null
+  private heartbeatInterval = 30000 // 30秒心跳
+
+  // 连接状态
+  public isConnected = false
+
+  // 事件回调
+  private onDialRequestCallback: ((data: DialRequest) => void) | null = null
+  private onDialCancelCallback: ((data: any) => void) | null = null
+  private onDeviceUnbindCallback: (() => void) | null = null
+
+  // 连接WebSocket
+  connect() {
+    const userStore = useUserStore()
+    const serverStore = useServerStore()
+
+    // 如果已经连接，不重复连接
+    if (this.isConnected && this.socket) {
+      console.log('[WebSocket] 已连接，跳过重复连接')
+      return
+    }
+
+    if (!userStore.wsToken) {
+      console.log('[WebSocket] 缺少 wsToken，请重新扫码绑定')
+      uni.$emit('ws:need_rebind', { reason: 'missing_token' })
+      return
+    }
+
+    // 优先使用 userStore 中保存的 wsUrl，否则从 serverStore 计算
+    const baseWsUrl = userStore.wsUrl || serverStore.wsUrl
+    if (!baseWsUrl) {
+      console.log('[WebSocket] 缺少 WebSocket 地址，请重新扫码绑定')
+      uni.$emit('ws:need_rebind', { reason: 'missing_url' })
+      return
+    }
+
+    if (this.socket) {
+      console.log('[WebSocket] 已有连接，先关闭')
+      this.disconnect()
+    }
+
+    // 构建完整的 WebSocket URL
+    // 如果 baseWsUrl 已经包含 /ws/mobile，则直接使用
+    let wsUrl = baseWsUrl
+    if (!wsUrl.includes('/ws/mobile')) {
+      wsUrl = `${baseWsUrl}/ws/mobile`
+    }
+
+    // 确保使用正确的协议
+    if (wsUrl.startsWith('http://')) {
+      wsUrl = wsUrl.replace('http://', 'ws://')
+    } else if (wsUrl.startsWith('https://')) {
+      wsUrl = wsUrl.replace('https://', 'wss://')
+    }
+
+    // 🔥 修复：确保 wsUrl 不包含 /api/v1 前缀
+    wsUrl = wsUrl.replace('/api/v1/ws/mobile', '/ws/mobile')
+    wsUrl = wsUrl.replace('/api/ws/mobile', '/ws/mobile')
+
+    wsUrl = `${wsUrl}?token=${userStore.wsToken}`
+
+    console.log('[WebSocket] 正在连接:', wsUrl)
+    console.log('[WebSocket] wsToken长度:', userStore.wsToken.length)
+    console.log('[WebSocket] 当前wsUrl:', userStore.wsUrl)
+    console.log('[WebSocket] serverStore.wsUrl:', serverStore.wsUrl)
+
+    try {
+      this.socket = uni.connectSocket({
+        url: wsUrl,
+        success: () => {
+          console.log('[WebSocket] 连接请求已发送')
+        },
+        fail: (err) => {
+          console.error('[WebSocket] 连接请求失败:', JSON.stringify(err))
+          // 连接失败时触发重连
+          this.scheduleReconnect()
+        }
+      })
+
+      this.setupListeners()
+    } catch (e) {
+      console.error('[WebSocket] 创建连接异常:', e)
+      this.scheduleReconnect()
+    }
+  }
+
+  // 设置监听器
+  private setupListeners() {
+    if (!this.socket) return
+
+    // 连接成功
+    this.socket.onOpen(() => {
+      console.log('[WebSocket] 连接成功')
+      this.isConnected = true
+      this.reconnectAttempts = 0
+
+      // 发送设备上线消息
+      this.sendDeviceOnline()
+
+      // 启动心跳
+      this.startHeartbeat()
+
+      // 通知UI更新
+      uni.$emit('ws:connected')
+    })
+
+    // 收到消息
+    this.socket.onMessage((res) => {
+      try {
+        const message: WsMessage = JSON.parse(res.data as string)
+        this.handleMessage(message)
+      } catch (e) {
+        console.error('[WebSocket] 解析消息失败:', e)
+      }
+    })
+
+    // 连接关闭
+    this.socket.onClose((res) => {
+      console.log('[WebSocket] 连接关闭:', res)
+      this.isConnected = false
+      this.stopHeartbeat()
+
+      uni.$emit('ws:disconnected')
+
+      // 自动重连
+      this.scheduleReconnect()
+    })
+
+    // 连接错误
+    this.socket.onError((err) => {
+      // 打印更详细的错误信息
+      console.error('[WebSocket] 连接错误:', JSON.stringify(err))
+      console.error('[WebSocket] 当前连接URL:', this.getCurrentWsUrl())
+      this.isConnected = false
+      uni.$emit('ws:error', err)
+    })
+  }
+
+  // 处理消息
+  private handleMessage(message: WsMessage) {
+    console.log('[WebSocket] 收到消息:', message.type, message.data)
+
+    switch (message.type) {
+      case 'DIAL_REQUEST':
+      case 'DIAL_COMMAND':
+        // 收到拨号指令 - 直接执行拨号，不弹窗确认
+        if (this.onDialRequestCallback && message.data) {
+          this.onDialRequestCallback(message.data)
+        }
+        // 直接执行拨号
+        this.executeDial(message.data)
+        break
+
+      case 'DIAL_CANCEL':
+        // 取消拨号
+        if (this.onDialCancelCallback && message.data) {
+          this.onDialCancelCallback(message.data)
+        }
+        break
+
+      case 'CALL_END':
+      case 'END_CALL':
+        // 服务器发来的结束通话指令（CRM端结束通话）
+        // 注意：系统级通话无法真正挂断，只能标记状态并弹出跟进页面
+        console.log('[WebSocket] 收到服务器结束通话指令:', message.data)
+        uni.$emit('call:end', message.data)
+        uni.$emit('ws:call_ended', message.data)
+
+        // 检查是否有当前通话，如果有则跳转到跟进页面
+        const currentCall = uni.getStorageSync('currentCall')
+        if (currentCall && currentCall.callId === message.data?.callId) {
+          const startTime = new Date(currentCall.startTime).getTime()
+          const duration = Math.floor((Date.now() - startTime) / 1000)
+
+          // 清除当前通话记录
+          uni.removeStorageSync('currentCall')
+
+          // 显示提示
+          uni.showModal({
+            title: '通话已结束',
+            content: 'CRM系统已标记通话结束，请填写跟进记录',
+            showCancel: false,
+            confirmText: '去填写',
+            success: () => {
+              uni.navigateTo({
+                url: `/pages/call-ended/index?callId=${currentCall.callId}&name=${encodeURIComponent(currentCall.customerName || '')}&customerId=${currentCall.customerId || ''}&duration=${duration}&hasRecording=false`
+              })
+            }
+          })
+        }
+        break
+
+      case 'DEVICE_UNBIND':
+        // 设备被解绑
+        if (this.onDeviceUnbindCallback) {
+          this.onDeviceUnbindCallback()
+        }
+        this.handleDeviceUnbind()
+        break
+
+      case 'HEARTBEAT_ACK':
+      case 'pong':
+        // 心跳响应，不需要处理
+        break
+
+      default:
+        console.log('[WebSocket] 未知消息类型:', message.type)
+    }
+  }
+
+  // 执行拨号 - 直接调用系统拨号，使用callStateService监听通话状态
+  private executeDial(data: DialRequest) {
+    if (!data || !data.phoneNumber) {
+      console.error('[WebSocket] 拨号数据无效:', data)
+      return
+    }
+
+    console.log('[WebSocket] 执行拨号:', data.phoneNumber, '客户:', data.customerName)
+
+    // 保存当前通话信息到全局，供通话结束后使用
+    const callStartTime = new Date().toISOString()
+    uni.setStorageSync('currentCall', {
+      callId: data.callId,
+      phoneNumber: data.phoneNumber,
+      customerName: data.customerName || '未知客户',
+      customerId: data.customerId || '',
+      startTime: callStartTime
+    })
+
+    // 上报拨号状态
+    this.reportCallStatus(data.callId, 'dialing')
+
+    // 启动通话状态监听服务
+    callStateService.startMonitoring({
+      callId: data.callId,
+      phoneNumber: data.phoneNumber,
+      customerName: data.customerName,
+      customerId: data.customerId
+    })
+
+    // 设置状态变化回调
+    callStateService.onStateChange((state, callInfo) => {
+      console.log('[WebSocket] 通话状态变化:', state, callInfo)
+
+      if (state === 'offhook') {
+        // 通话已接通
+        uni.showToast({
+          title: '通话已接通',
+          icon: 'success',
+          duration: 1500
+        })
+      } else if (state === 'ringing') {
+        // 对方响铃中
+        uni.showToast({
+          title: '对方响铃中...',
+          icon: 'none',
+          duration: 1500
+        })
+      }
+    })
+
+    // 设置通话结束回调
+    callStateService.onCallEnd((callInfo, duration) => {
+      console.log('[WebSocket] 通话结束回调:', callInfo, duration)
+      // 清除当前通话记录
+      uni.removeStorageSync('currentCall')
+    })
+
+    // 直接调用系统拨号
+    // #ifdef APP-PLUS
+    plus.device.dial(data.phoneNumber, false)
+    console.log('[WebSocket] 系统拨号已发起')
+
+    // 显示提示
+    uni.showToast({
+      title: '正在拨号...',
+      icon: 'none',
+      duration: 2000
+    })
+    // #endif
+
+    // #ifndef APP-PLUS
+    uni.makePhoneCall({
+      phoneNumber: data.phoneNumber,
+      success: () => {
+        console.log('[WebSocket] 系统拨号成功')
+      },
+      fail: (err) => {
+        console.error('[WebSocket] 系统拨号失败:', err)
+        uni.showToast({ title: '拨号失败', icon: 'none' })
+        callStateService.stopMonitoring()
+      }
+    })
+    // #endif
+  }
+
+  // 处理设备解绑
+  private handleDeviceUnbind() {
+    const userStore = useUserStore()
+    userStore.clearDeviceInfo()
+
+    uni.showModal({
+      title: '设备已解绑',
+      content: '您的设备已被管理员解绑，请重新绑定',
+      showCancel: false,
+      success: () => {
+        uni.reLaunch({ url: '/pages/index/index' })
+      }
+    })
+  }
+
+  // 发送消息
+  send(type: string, data?: any) {
+    if (!this.socket || !this.isConnected) {
+      console.warn('[WebSocket] 未连接，无法发送消息')
+      return
+    }
+
+    const message: WsMessage = {
+      type,
+      messageId: `msg_${Date.now()}`,
+      timestamp: Date.now(),
+      data
+    }
+
+    this.socket.send({
+      data: JSON.stringify(message),
+      fail: (err) => {
+        console.error('[WebSocket] 发送消息失败:', err)
+      }
+    })
+  }
+
+  // 发送设备上线消息
+  private sendDeviceOnline() {
+    const userStore = useUserStore()
+    this.send('DEVICE_ONLINE', {
+      deviceId: userStore.deviceInfo?.deviceId,
+      appVersion: APP_VERSION
+    })
+  }
+
+  // 上报通话状态
+  reportCallStatus(callId: string, status: string, extra?: any) {
+    this.send('CALL_STATUS', {
+      callId,
+      status,
+      timestamp: new Date().toISOString(),
+      ...extra
+    })
+  }
+
+  // 上报通话结束
+  reportCallEnd(callId: string, data: any) {
+    this.send('CALL_ENDED', {
+      callId,
+      ...data
+    })
+  }
+
+  // 启动心跳
+  private startHeartbeat() {
+    this.stopHeartbeat()
+
+    this.heartbeatTimer = setInterval(() => {
+      if (this.isConnected) {
+        this.send('HEARTBEAT')
+      }
+    }, this.heartbeatInterval) as unknown as number
+  }
+
+  // 停止心跳
+  private stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer)
+      this.heartbeatTimer = null
+    }
+  }
+
+  // 重连调度
+  private scheduleReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('[WebSocket] 达到最大重连次数')
+      uni.$emit('ws:max_reconnect')
+      return
+    }
+
+    this.reconnectAttempts++
+    const delay = this.reconnectDelay * Math.pow(1.5, this.reconnectAttempts - 1)
+
+    console.log(`[WebSocket] ${delay}ms后重连，第${this.reconnectAttempts}次`)
+
+    setTimeout(() => {
+      this.connect()
+    }, Math.min(delay, 30000)) // 最大30秒
+  }
+
+  // 断开连接
+  disconnect() {
+    this.stopHeartbeat()
+
+    if (this.socket) {
+      this.socket.close({})
+      this.socket = null
+    }
+
+    this.isConnected = false
+  }
+
+  // 设置拨号请求回调
+  onDialRequest(callback: (data: DialRequest) => void) {
+    this.onDialRequestCallback = callback
+  }
+
+  // 设置取消拨号回调
+  onDialCancel(callback: (data: any) => void) {
+    this.onDialCancelCallback = callback
+  }
+
+  // 设置设备解绑回调
+  onDeviceUnbind(callback: () => void) {
+    this.onDeviceUnbindCallback = callback
+  }
+
+  // 获取当前WebSocket URL（用于调试）
+  private getCurrentWsUrl(): string {
+    const userStore = useUserStore()
+    const serverStore = useServerStore()
+    const baseWsUrl = userStore.wsUrl || serverStore.wsUrl
+    if (!baseWsUrl) return '(无wsUrl)'
+    let wsUrl = baseWsUrl
+    if (!wsUrl.includes('/ws/mobile')) {
+      wsUrl = `${baseWsUrl}/ws/mobile`
+    }
+    return wsUrl
+  }
+}
+
+// 导出单例
+export const wsService = new WebSocketService()
+export default wsService
+
+
+// ------------------------------------------------------------
+// 文件: src/services/callStateService.ts
+// ------------------------------------------------------------
+/**
+ * 通话状态监听服务
+ *
+ * 用于监听系统通话状态变化，实现：
+ * 1. 检测通话接通 - 开始计时
+ * 2. 检测通话挂断 - 自动结束并上传录音
+ * 3. 自动扫描系统通话录音并上传
+ */
+
+import { wsService } from './websocket'
+import { reportCallEnd } from '@/api/call'
+import { recordingService } from './recordingService'
+
+// 通话状态
+export type CallState = 'idle' | 'dialing' | 'ringing' | 'offhook' | 'ended'
+
+// 当前通话信息
+interface CurrentCallInfo {
+  callId: string
+  phoneNumber: string
+  customerName?: string
+  customerId?: string
+  startTime: number
+  connectTime?: number
+  state: CallState
+  recordingPath?: string
+}
+
+class CallStateService {
+  private currentCall: CurrentCallInfo | null = null
+  private stateCheckTimer: number | null = null
+  private lastPhoneState: number = 0 // 0=IDLE, 1=RINGING, 2=OFFHOOK
+  private isMonitoring = false
+
+  // 回调函数
+  private onStateChangeCallback: ((state: CallState, callInfo: CurrentCallInfo | null) => void) | null = null
+  private onCallEndCallback: ((callInfo: CurrentCallInfo, duration: number) => void) | null = null
+
+  /**
+   * 开始监听通话状态
+   */
+  startMonitoring(callInfo: {
+    callId: string
+    phoneNumber: string
+    customerName?: string
+    customerId?: string
+  }) {
+    console.log('[CallStateService] 开始监听通话状态:', callInfo)
+
+    this.currentCall = {
+      ...callInfo,
+      startTime: Date.now(),
+      state: 'dialing'
+    }
+
+    this.isMonitoring = true
+    this.lastPhoneState = 0
+
+    // 启动状态检测
+    this.startStateCheck()
+  }
+
+  /**
+   * 停止监听
+   */
+  stopMonitoring() {
+    console.log('[CallStateService] 停止监听')
+    this.isMonitoring = false
+    this.stopStateCheck()
+    this.currentCall = null
+  }
+
+  /**
+   * 启动状态检测定时器
+   */
+  private startStateCheck() {
+    this.stopStateCheck()
+
+    // 每500ms检测一次通话状态
+    this.stateCheckTimer = setInterval(() => {
+      this.checkPhoneState()
+    }, 500) as unknown as number
+  }
+
+  /**
+   * 停止状态检测
+   */
+  private stopStateCheck() {
+    if (this.stateCheckTimer) {
+      clearInterval(this.stateCheckTimer)
+      this.stateCheckTimer = null
+    }
+  }
+
+  /**
+   * 检测系统通话状态
+   */
+  private checkPhoneState() {
+    if (!this.isMonitoring || !this.currentCall) return
+
+    // #ifdef APP-PLUS
+    try {
+      // 使用 Android 原生 API 获取通话状态
+      const main = plus.android.runtimeMainActivity()
+      const Context = plus.android.importClass('android.content.Context')
+      plus.android.importClass('android.telephony.TelephonyManager')
+
+      const telephonyManager = (main as any).getSystemService((Context as any).TELEPHONY_SERVICE)
+      const callState = telephonyManager.getCallState()
+
+      // callState: 0=IDLE, 1=RINGING, 2=OFFHOOK
+      if (callState !== this.lastPhoneState) {
+        console.log('[CallStateService] 通话状态变化:', this.lastPhoneState, '->', callState)
+        this.handleStateChange(callState)
+        this.lastPhoneState = callState
+      }
+    } catch (e) {
+      console.error('[CallStateService] 获取通话状态失败:', e)
+    }
+    // #endif
+  }
+
+  /**
+   * 处理状态变化
+   */
+  private handleStateChange(newState: number) {
+    if (!this.currentCall) return
+
+    const oldState = this.currentCall.state
+
+    switch (newState) {
+      case 0: // IDLE - 通话结束
+        if (oldState !== 'idle' && oldState !== 'ended') {
+          this.currentCall.state = 'ended'
+          this.onCallEnded()
+        }
+        break
+
+      case 1: // RINGING - 响铃中
+        if (oldState === 'dialing') {
+          this.currentCall.state = 'ringing'
+          this.notifyStateChange('ringing')
+        }
+        break
+
+      case 2: // OFFHOOK - 通话中（接通）
+        if (oldState !== 'offhook') {
+          this.currentCall.state = 'offhook'
+          this.currentCall.connectTime = Date.now()
+          this.notifyStateChange('offhook')
+
+          // 通知WebSocket通话已接通
+          wsService.reportCallStatus(this.currentCall.callId, 'connected')
+        }
+        break
+    }
+  }
+
+  /**
+   * 通话结束处理
+   */
+  private async onCallEnded() {
+    if (!this.currentCall) return
+
+    console.log('[CallStateService] 通话结束')
+
+    // 计算通话时长
+    let duration = 0
+    if (this.currentCall.connectTime) {
+      duration = Math.floor((Date.now() - this.currentCall.connectTime) / 1000)
+    }
+
+    const callInfo = { ...this.currentCall }
+    const endTime = Date.now()
+
+    // 通知状态变化
+    this.notifyStateChange('ended')
+
+    // 先通过WebSocket通知服务器通话结束（不等待录音）
+    wsService.reportCallEnd(callInfo.callId, {
+      status: duration > 0 ? 'connected' : 'missed',
+      startTime: new Date(callInfo.startTime).toISOString(),
+      endTime: new Date(endTime).toISOString(),
+      duration,
+      hasRecording: false, // 先标记为无录音，后续找到再更新
+      endReason: 'system_hangup',
+    })
+
+    // 上报通话结束到API
+    try {
+      await reportCallEnd({
+        callId: callInfo.callId,
+        status: duration > 0 ? 'connected' : 'missed',
+        startTime: new Date(callInfo.startTime).toISOString(),
+        endTime: new Date(endTime).toISOString(),
+        duration,
+        hasRecording: false,
+      })
+    } catch (e) {
+      console.error('[CallStateService] 上报通话结束失败:', e)
+    }
+
+    // 触发回调
+    if (this.onCallEndCallback) {
+      this.onCallEndCallback(callInfo, duration)
+    }
+
+    // 保存通话信息供跟进页面使用
+    uni.setStorageSync('lastEndedCall', {
+      callId: callInfo.callId,
+      customerName: callInfo.customerName,
+      customerId: callInfo.customerId,
+      phoneNumber: callInfo.phoneNumber,
+      duration,
+      endTime: new Date(endTime).toISOString(),
+      wasConnected: duration > 0,
+      hasRecording: false, // 先标记为无录音
+    })
+
+    // 停止监听
+    this.stopMonitoring()
+
+    // 跳转到通话结束页面
+    setTimeout(() => {
+      uni.navigateTo({
+        url: `/pages/call-ended/index?callId=${callInfo.callId}&name=${encodeURIComponent(callInfo.customerName || '')}&customerId=${callInfo.customerId || ''}&duration=${duration}&hasRecording=false`,
+      })
+    }, 300)
+
+    // 异步处理录音（在后台进行，不阻塞用户操作）
+    this.processRecordingAsync(callInfo, duration, endTime)
+  }
+
+  /**
+   * 异步处理录音文件
+   */
+  private async processRecordingAsync(
+    callInfo: CurrentCallInfo,
+    duration: number,
+    endTime: number
+  ) {
+    if (duration <= 0) {
+      console.log('[CallStateService] 通话未接通，跳过录音处理')
+      return
+    }
+
+    // 检查是否开启了自动上传
+    try {
+      const callSettings = uni.getStorageSync('callSettings')
+      if (callSettings) {
+        const settings = JSON.parse(callSettings)
+        if (!settings.autoUploadRecording) {
+          console.log('[CallStateService] 自动上传已关闭，跳过录音处理')
+          return
+        }
+      }
+    } catch (e) {
+      console.error('[CallStateService] 读取设置失败:', e)
+    }
+
+    console.log('[CallStateService] 开始异步处理录音...')
+
+    try {
+      // 使用录音服务查找并上传录音
+      const result = await recordingService.processCallRecording({
+        callId: callInfo.callId,
+        phoneNumber: callInfo.phoneNumber,
+        startTime: callInfo.startTime,
+        endTime: endTime,
+        duration: duration,
+      })
+
+      if (result.found && result.uploaded) {
+        console.log('[CallStateService] 录音处理成功:', result.recordingPath)
+
+        // 通知服务器录音已上传
+        wsService.reportCallEnd(callInfo.callId, {
+          status: 'connected',
+          startTime: new Date(callInfo.startTime).toISOString(),
+          endTime: new Date(endTime).toISOString(),
+          duration,
+          hasRecording: true,
+          recordingPath: result.recordingPath,
+          endReason: 'recording_uploaded',
+        })
+
+        // 显示成功提示
+        uni.showToast({
+          title: '录音已上传',
+          icon: 'success',
+          duration: 2000,
+        })
+      } else if (result.found) {
+        console.log('[CallStateService] 找到录音但上传失败')
+        uni.showToast({
+          title: '录音上传失败',
+          icon: 'none',
+          duration: 2000,
+        })
+      } else {
+        console.log('[CallStateService] 未找到录音文件')
+        // 不显示提示，可能是用户没有开启系统录音
+      }
+    } catch (e) {
+      console.error('[CallStateService] 录音处理失败:', e)
+    }
+  }
+
+  /**
+   * 通知状态变化
+   */
+  private notifyStateChange(state: CallState) {
+    if (this.onStateChangeCallback && this.currentCall) {
+      this.onStateChangeCallback(state, this.currentCall)
+    }
+  }
+
+  /**
+   * 设置状态变化回调
+   */
+  onStateChange(callback: (state: CallState, callInfo: CurrentCallInfo | null) => void) {
+    this.onStateChangeCallback = callback
+  }
+
+  /**
+   * 设置通话结束回调
+   */
+  onCallEnd(callback: (callInfo: CurrentCallInfo, duration: number) => void) {
+    this.onCallEndCallback = callback
+  }
+
+  /**
+   * 获取当前通话信息
+   */
+  getCurrentCall(): CurrentCallInfo | null {
+    return this.currentCall
+  }
+
+  /**
+   * 获取当前通话时长（秒）
+   */
+  getCurrentDuration(): number {
+    if (!this.currentCall || !this.currentCall.connectTime) return 0
+    return Math.floor((Date.now() - this.currentCall.connectTime) / 1000)
+  }
+
+  /**
+   * 是否正在通话中
+   */
+  isInCall(): boolean {
+    return this.isMonitoring && this.currentCall !== null &&
+           (this.currentCall.state === 'offhook' || this.currentCall.state === 'ringing' || this.currentCall.state === 'dialing')
+  }
+}
+
+// 导出单例
+export const callStateService = new CallStateService()
+export default callStateService
+
+
+// ------------------------------------------------------------
+// 文件: src/services/recordingService.ts
+// ------------------------------------------------------------
+/**
+ * 通话录音服务
+ *
+ * 功能：
+ * 1. 扫描系统通话录音文件夹
+ * 2. 匹配通话时间找到对应录音
+ * 3. 上传录音文件到服务器
+ *
+ * 支持的录音文件夹路径（不同手机品牌）：
+ * - 小米: /storage/emulated/0/MIUI/sound_recorder/call_rec/
+ * - 华为: /storage/emulated/0/Sounds/CallRecord/
+ * - OPPO: /storage/emulated/0/Recordings/Call/
+ * - VIVO: /storage/emulated/0/Record/Call/
+ * - 三星: /storage/emulated/0/Call/
+ * - 通用: /storage/emulated/0/Recordings/
+ */
+
+import { uploadRecording } from '@/api/call'
+
+// 常见手机品牌的录音文件夹路径
+const RECORDING_PATHS = [
+  // 小米
+  '/storage/emulated/0/MIUI/sound_recorder/call_rec/',
+  '/storage/emulated/0/MIUI/sound_recorder/',
+  // 华为
+  '/storage/emulated/0/Sounds/CallRecord/',
+  '/storage/emulated/0/record/',
+  '/storage/emulated/0/Record/',
+  // OPPO
+  '/storage/emulated/0/Recordings/Call/',
+  '/storage/emulated/0/Recordings/',
+  // VIVO
+  '/storage/emulated/0/Record/Call/',
+  '/storage/emulated/0/Record/',
+  // 三星
+  '/storage/emulated/0/Call/',
+  '/storage/emulated/0/Recordings/Call recordings/',
+  // 一加
+  '/storage/emulated/0/Record/PhoneRecord/',
+  // 通用路径
+  '/storage/emulated/0/Recordings/',
+  '/storage/emulated/0/AudioRecorder/',
+  '/storage/emulated/0/CallRecordings/',
+  '/sdcard/MIUI/sound_recorder/call_rec/',
+  '/sdcard/Recordings/',
+]
+
+// 录音文件扩展名
+const AUDIO_EXTENSIONS = ['.mp3', '.amr', '.wav', '.m4a', '.3gp', '.aac', '.ogg']
+
+interface RecordingFile {
+  path: string
+  name: string
+  size: number
+  lastModified: number
+}
+
+interface CallInfo {
+  callId: string
+  phoneNumber: string
+  startTime: number // 通话开始时间戳
+  endTime: number // 通话结束时间戳
+  duration: number // 通话时长（秒）
+}
+
+class RecordingService {
+  private isScanning = false
+  private lastScanTime = 0
+  private knownRecordings: Set<string> = new Set()
+
+  /**
+   * 检查存储权限（适配 Android 11+ Scoped Storage）
+   */
+  async checkPermissions(): Promise<boolean> {
+    // #ifdef APP-PLUS
+    return new Promise((resolve) => {
+      try {
+        // 检查 Android 版本
+        const Build = plus.android.importClass('android.os.Build')
+        const sdkVersion = (Build as any).VERSION.SDK_INT
+
+        if (sdkVersion >= 30) {
+          // Android 11+: 检查 MANAGE_EXTERNAL_STORAGE 权限
+          const Environment = plus.android.importClass('android.os.Environment')
+          if ((Environment as any).isExternalStorageManager()) {
+            resolve(true)
+            return
+          }
+          // 请求所有文件访问权限
+          const Settings = plus.android.importClass('android.provider.Settings')
+          const Intent = plus.android.importClass('android.content.Intent')
+          const Uri = plus.android.importClass('android.net.Uri')
+          const main = plus.android.runtimeMainActivity()
+          const packageName = (main as any).getPackageName()
+
+          uni.showModal({
+            title: '需要存储权限',
+            content: '为了自动扫描和上传通话录音，需要授予"所有文件访问"权限。',
+            confirmText: '去授权',
+            success: (res) => {
+              if (res.confirm) {
+                try {
+                  const intent = new (Intent as any)((Settings as any).ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                  intent.setData((Uri as any).parse('package:' + packageName))
+                  ;(main as any).startActivity(intent)
+                } catch (_e) {
+                  // 降级方案
+                  try {
+                    const intent2 = new (Intent as any)((Settings as any).ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    ;(main as any).startActivity(intent2)
+                  } catch (_e2) {
+                    console.error('[RecordingService] 无法打开文件访问权限设置')
+                  }
+                }
+              }
+              // 延迟检查权限结果
+              setTimeout(() => {
+                resolve((Environment as any).isExternalStorageManager())
+              }, 1000)
+            }
+          })
+        } else if (sdkVersion >= 33) {
+          // Android 13+: 使用 READ_MEDIA_AUDIO
+          plus.android.requestPermissions(
+            ['android.permission.READ_MEDIA_AUDIO'],
+            (result: any) => {
+              resolve(result.granted && result.granted.length >= 1)
+            },
+            (_error: any) => {
+              resolve(false)
+            }
+          )
+        } else {
+          // Android 10 及以下: 传统存储权限
+          plus.android.requestPermissions(
+            [
+              'android.permission.READ_EXTERNAL_STORAGE',
+              'android.permission.WRITE_EXTERNAL_STORAGE',
+            ],
+            (result: any) => {
+              console.log('[RecordingService] 权限请求结果:', result)
+              const granted = result.granted && result.granted.length >= 2
+              resolve(granted)
+            },
+            (error: any) => {
+              console.error('[RecordingService] 权限请求失败:', error)
+              resolve(false)
+            }
+          )
+        }
+      } catch (e) {
+        console.error('[RecordingService] 权限检查异常:', e)
+        // 降级到旧方案
+        plus.android.requestPermissions(
+          [
+            'android.permission.READ_EXTERNAL_STORAGE',
+            'android.permission.WRITE_EXTERNAL_STORAGE',
+          ],
+          (result: any) => {
+            resolve(result.granted && result.granted.length >= 2)
+          },
+          (_error: any) => {
+            resolve(false)
+          }
+        )
+      }
+    })
+    // #endif
+
+    // #ifndef APP-PLUS
+    return false
+    // #endif
+  }

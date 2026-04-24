@@ -1,0 +1,1502 @@
+/* 页眉: 云客CRM外呼助手软件 V1.0.0 */
+/* 源代码鉴别材料 - 后30页 (第31-60页) */
+
+  // #ifndef APP-PLUS
+  // 非 APP 环境显示提示
+  uni.showModal({
+    title: '提示',
+    content: '此功能需要在手机APP中使用。\n\n请在真机上安装APP后，进入设置页面开启系统录音功能。',
+    showCancel: false,
+    confirmText: '我知道了'
+  })
+  // #endif
+}
+
+// 跳转到关于页面
+const goToAbout = () => {
+  uni.navigateTo({ url: '/pages/about/index' })
+}
+
+// 解绑设备
+const handleUnbind = () => {
+  uni.showModal({
+    title: '确认解绑',
+    content: '解绑后将无法接收PC端拨号指令，确定要解绑吗？',
+    success: async (res) => {
+      if (res.confirm) {
+        uni.showLoading({ title: '解绑中...' })
+        try {
+          wsService.disconnect()
+          await unbindDevice(userStore.deviceInfo?.deviceId)
+          userStore.clearDeviceInfo()
+          uni.hideLoading()
+          uni.showToast({ title: '解绑成功', icon: 'success' })
+        } catch (e: any) {
+          uni.hideLoading()
+          console.error('解绑失败:', e)
+          userStore.clearDeviceInfo()
+          uni.showToast({ title: '已解绑', icon: 'success' })
+        }
+      }
+    }
+  })
+}
+
+// 退出登录
+const handleLogout = () => {
+  uni.showModal({
+    title: '确认退出',
+    content: '确定要退出登录吗？',
+    success: (res) => {
+      if (res.confirm) {
+        wsService.send('DEVICE_OFFLINE', {
+          deviceId: userStore.deviceInfo?.deviceId,
+          reason: 'logout'
+        })
+        wsService.disconnect()
+        uni.removeStorageSync('currentCall')
+        // 注意：不清除 callSettings 和 uploadPasswordData
+        // 这样管理员设置的自动上传和密码会保留
+        // 防止员工通过退出登录来绑过密码保护
+        userStore.logout()
+        uni.reLaunch({ url: '/pages/login/index' })
+      }
+    }
+  })
+}
+</script>
+
+<style lang="scss" scoped>
+.settings-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding-bottom: 180rpx;
+  width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+
+  .user-section {
+    display: flex;
+    align-items: center;
+    background: #fff;
+    padding: 40rpx 32rpx;
+    margin-bottom: 24rpx;
+
+    .avatar {
+      width: 100rpx;
+      height: 100rpx;
+      background: linear-gradient(135deg, #6EE7B7 0%, #34D399 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-right: 24rpx;
+
+      text {
+        font-size: 44rpx;
+        color: #fff;
+        font-weight: bold;
+      }
+    }
+
+    .info {
+      .name {
+        font-size: 36rpx;
+        font-weight: 600;
+        color: #1F2937;
+        display: block;
+      }
+
+      .dept {
+        font-size: 26rpx;
+        color: #6B7280;
+        margin-top: 8rpx;
+        display: block;
+      }
+    }
+  }
+
+  .section {
+    margin-bottom: 24rpx;
+
+    .section-title {
+      font-size: 26rpx;
+      color: #6B7280;
+      padding: 0 32rpx;
+      margin-bottom: 12rpx;
+      display: block;
+    }
+  }
+
+  .setting-group {
+    background: #fff;
+
+    .setting-item {
+      display: flex;
+      align-items: center;
+      padding: 28rpx 32rpx;
+      border-bottom: 1rpx solid #F3F4F6;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      &.clickable {
+        &:active {
+          background: #F9FAFB;
+        }
+      }
+
+      .label {
+        font-size: 30rpx;
+        color: #1F2937;
+        flex: 1;
+      }
+
+      .value {
+        font-size: 28rpx;
+        color: #6B7280;
+
+        &.bound, &.connected, &.enabled {
+          color: #10B981;
+        }
+
+        &.disconnected {
+          color: #EF4444;
+        }
+
+        &.unbound, &.disabled {
+          color: #F59E0B;
+        }
+      }
+
+      .arrow {
+        font-size: 32rpx;
+        color: #D1D5DB;
+        margin-left: 12rpx;
+      }
+
+      .picker-value {
+        color: #3B82F6;
+        text-decoration: underline;
+      }
+
+      .connection-status, .recording-status {
+        display: flex;
+        align-items: center;
+
+        .status-dot {
+          width: 16rpx;
+          height: 16rpx;
+          border-radius: 50%;
+          margin-right: 12rpx;
+
+          &.connected, &.enabled {
+            background: #10B981;
+          }
+
+          &.disconnected, &.disabled {
+            background: #F59E0B;
+          }
+
+          &.unbound {
+            background: #9CA3AF;
+          }
+        }
+
+        .btn-mini-reconnect {
+          margin-left: 16rpx;
+          padding: 8rpx 20rpx;
+          font-size: 24rpx;
+          color: #34D399;
+          background: rgba(52, 211, 153, 0.1);
+          border: 1rpx solid #34D399;
+          border-radius: 24rpx;
+          line-height: 1.2;
+        }
+
+        .btn-mini-refresh {
+          margin-left: 16rpx;
+          padding: 8rpx 20rpx;
+          font-size: 24rpx;
+          color: #3B82F6;
+          background: rgba(59, 130, 246, 0.1);
+          border: 1rpx solid #3B82F6;
+          border-radius: 24rpx;
+          line-height: 1.2;
+        }
+
+        .checking-indicator {
+          text {
+            font-size: 26rpx;
+            color: #6B7280;
+          }
+        }
+      }
+
+      .upload-status {
+        display: flex;
+        align-items: center;
+
+        .lock-icon {
+          font-size: 28rpx;
+          margin-right: 12rpx;
+        }
+      }
+    }
+  }
+
+  .setting-tip {
+    padding: 16rpx 32rpx;
+
+    text {
+      font-size: 24rpx;
+      color: #6B7280;
+      line-height: 1.6;
+    }
+  }
+
+  .actions {
+    padding: 48rpx 32rpx;
+
+    button {
+      width: 100%;
+      height: 88rpx;
+      border-radius: 16rpx;
+      font-size: 30rpx;
+      margin-bottom: 24rpx;
+      border: none;
+
+      &.btn-unbind {
+        background: #fff;
+        color: #F59E0B;
+        border: 2rpx solid #F59E0B;
+      }
+
+      &.btn-logout {
+        background: #fff;
+        color: #EF4444;
+        border: 2rpx solid #EF4444;
+      }
+    }
+  }
+}
+
+// 密码弹窗样式
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  width: 85%;
+  max-width: 600rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 40rpx 32rpx;
+
+  .modal-title {
+    font-size: 36rpx;
+    font-weight: 600;
+    color: #1F2937;
+    text-align: center;
+    display: block;
+    margin-bottom: 24rpx;
+  }
+
+  .modal-desc {
+    font-size: 28rpx;
+    color: #6B7280;
+    display: block;
+    margin-bottom: 20rpx;
+  }
+
+  .password-input-group {
+    margin-bottom: 20rpx;
+
+    .password-input {
+      width: 100%;
+      height: 88rpx;
+      background: #F3F4F6;
+      border-radius: 12rpx;
+      padding: 0 24rpx;
+      font-size: 32rpx;
+      text-align: center;
+      letter-spacing: 16rpx;
+      box-sizing: border-box;
+    }
+  }
+
+  .security-question {
+    margin-bottom: 24rpx;
+
+    .question-label {
+      font-size: 28rpx;
+      color: #1F2937;
+      display: block;
+      margin-bottom: 12rpx;
+    }
+
+    .answer-input {
+      width: 100%;
+      height: 88rpx;
+      background: #F3F4F6;
+      border-radius: 12rpx;
+      padding: 0 24rpx;
+      font-size: 28rpx;
+      box-sizing: border-box;
+    }
+  }
+
+  .forgot-password {
+    text-align: right;
+    margin-bottom: 24rpx;
+
+    text {
+      font-size: 26rpx;
+      color: #3B82F6;
+    }
+  }
+
+  .modal-buttons {
+    display: flex;
+    gap: 24rpx;
+    margin-top: 32rpx;
+
+    button {
+      flex: 1;
+      height: 88rpx;
+      border-radius: 16rpx;
+      font-size: 30rpx;
+      border: none;
+
+      &.btn-cancel {
+        background: #F3F4F6;
+        color: #6B7280;
+      }
+
+      &.btn-confirm {
+        background: linear-gradient(135deg, #6EE7B7 0%, #34D399 100%);
+        color: #fff;
+      }
+    }
+  }
+}
+</style>
+
+
+// ------------------------------------------------------------
+// 文件: src/pages/about/index.vue
+// ------------------------------------------------------------
+<template>
+  <view class="about-page">
+    <!-- 应用信息 -->
+    <view class="app-info">
+      <image class="app-logo" src="/static/logo.png" mode="aspectFit" />
+      <text class="app-name">CRM外呼助手</text>
+      <text class="app-version">版本 v{{ appVersion }}</text>
+      <text class="app-slogan">高效外呼 · 智能管理</text>
+    </view>
+
+    <!-- 功能入口 -->
+    <view class="menu-section">
+      <view class="menu-item" @tap="openUserAgreement">
+        <text class="menu-icon">📄</text>
+        <text class="menu-label">用户服务协议</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" @tap="openPrivacyPolicy">
+        <text class="menu-icon">🔒</text>
+        <text class="menu-label">隐私政策</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" @tap="showFeedback">
+        <text class="menu-icon">💬</text>
+        <text class="menu-label">意见反馈</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" @tap="showContact">
+        <text class="menu-icon">📞</text>
+        <text class="menu-label">联系我们</text>
+        <text class="menu-arrow">›</text>
+      </view>
+    </view>
+
+    <!-- 公司信息 -->
+    <view class="company-section">
+      <text class="company-name">广州仙狐网络科技有限公司</text>
+      <text class="copyright">Copyright © 2024-2026 All Rights Reserved</text>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { APP_VERSION } from '@/config/app'
+
+const appVersion = APP_VERSION
+
+// 打开用户协议
+const openUserAgreement = () => {
+  uni.navigateTo({ url: '/pages/agreement/user-agreement' })
+}
+
+// 打开隐私政策
+const openPrivacyPolicy = () => {
+  uni.navigateTo({ url: '/pages/agreement/privacy-policy' })
+}
+
+// 意见反馈
+const showFeedback = () => {
+  uni.showModal({
+    title: '意见反馈',
+    content: '如有问题或建议，请通过以下方式联系我们：\n\n📞 客服电话：13570727234\n📧 邮箱：xianhuquwang@163.com\n💬 微信：nxys789\n\n我们会认真对待每一条反馈！',
+    showCancel: false,
+    confirmText: '我知道了'
+  })
+}
+
+// 联系我们
+const showContact = () => {
+  uni.showActionSheet({
+    itemList: ['拨打客服电话', '复制客服微信', '复制邮箱地址'],
+    success: (res) => {
+      if (res.tapIndex === 0) {
+        uni.makePhoneCall({
+          phoneNumber: '13570727234',
+          fail: () => {
+            uni.setClipboardData({
+              data: '13570727234',
+              success: () => {
+                uni.showToast({ title: '电话已复制', icon: 'success' })
+              }
+            })
+          }
+        })
+      } else if (res.tapIndex === 1) {
+        uni.setClipboardData({
+          data: 'nxys789',
+          success: () => {
+            uni.showToast({ title: '微信号已复制', icon: 'success' })
+          }
+        })
+      } else if (res.tapIndex === 2) {
+        uni.setClipboardData({
+          data: 'xianhuquwang@163.com',
+          success: () => {
+            uni.showToast({ title: '邮箱已复制', icon: 'success' })
+          }
+        })
+      }
+    }
+  })
+}
+</script>
+
+<style lang="scss" scoped>
+.about-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding-bottom: 60rpx;
+
+  .app-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 80rpx 32rpx 60rpx;
+    background: linear-gradient(135deg, #6EE7B7 0%, #34D399 100%);
+
+    .app-logo {
+      width: 160rpx;
+      height: 160rpx;
+      background: #fff;
+      border-radius: 32rpx;
+      padding: 20rpx;
+      box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.15);
+    }
+
+    .app-name {
+      font-size: 44rpx;
+      font-weight: bold;
+      color: #fff;
+      margin-top: 32rpx;
+    }
+
+    .app-version {
+      font-size: 28rpx;
+      color: rgba(255, 255, 255, 0.9);
+      margin-top: 12rpx;
+    }
+
+    .app-slogan {
+      font-size: 26rpx;
+      color: rgba(255, 255, 255, 0.8);
+      margin-top: 16rpx;
+    }
+  }
+
+  .menu-section {
+    background: #fff;
+    margin: 32rpx;
+    border-radius: 16rpx;
+    overflow: hidden;
+
+    .menu-item {
+      display: flex;
+      align-items: center;
+      padding: 32rpx;
+      border-bottom: 1rpx solid #F3F4F6;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      &:active {
+        background: #F9FAFB;
+      }
+
+      .menu-icon {
+        font-size: 36rpx;
+        margin-right: 24rpx;
+      }
+
+      .menu-label {
+        flex: 1;
+        font-size: 30rpx;
+        color: #1F2937;
+      }
+
+      .menu-arrow {
+        font-size: 32rpx;
+        color: #D1D5DB;
+      }
+    }
+  }
+
+  .company-section {
+    text-align: center;
+    padding: 40rpx 32rpx;
+
+    .company-name {
+      display: block;
+      font-size: 26rpx;
+      color: #6B7280;
+      margin-bottom: 12rpx;
+    }
+
+    .copyright {
+      display: block;
+      font-size: 22rpx;
+      color: #9CA3AF;
+    }
+  }
+}
+</style>
+
+
+// ------------------------------------------------------------
+// 文件: src/pages/agreement/user-agreement.vue
+// ------------------------------------------------------------
+<template>
+  <view class="agreement-page">
+    <scroll-view scroll-y class="scroll-content">
+      <view class="content">
+        <text class="title">用户服务协议</text>
+        <text class="update-time">更新日期：2026年1月2日</text>
+        <text class="update-time">生效日期：2026年1月2日</text>
+
+        <!-- 引言 -->
+        <view class="section">
+          <text class="section-content intro">
+            欢迎您使用CRM外呼助手（以下简称"本应用"）！本应用由广州仙狐网络科技有限公司（以下简称"我们"）开发和运营。在您使用本应用之前，请您仔细阅读并充分理解本《用户服务协议》（以下简称"本协议"）的全部内容。
+          </text>
+          <text class="section-content intro">
+            【特别提示】当您点击"同意"按钮或以其他方式确认接受本协议，或您下载、安装、注册、登录、使用本应用时，即表示您已充分阅读、理解并同意接受本协议的全部内容，本协议即在您与我们之间产生法律效力。如您不同意本协议的任何条款，请勿使用本应用。
+          </text>
+        </view>
+
+        <!-- 第一条 -->
+        <view class="section">
+          <text class="section-title">第一条 协议的接受与修改</text>
+
+          <view class="subsection">
+            <text class="subsection-title">1.1 协议的接受</text>
+            <text class="section-content">
+              本协议是您与广州仙狐网络科技有限公司之间关于使用本应用服务所订立的协议。本协议对您和我们均具有法律约束力。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">1.2 协议的修改</text>
+            <text class="section-content">
+              我们有权根据国家法律法规的变化、业务发展需要等原因，对本协议进行修改。修改后的协议将在本应用内公布，自公布之日起生效。如您在协议修改后继续使用本应用，即视为您已接受修改后的协议。如您不同意修改后的协议，应立即停止使用本应用。
+            </text>
+          </view>
+        </view>
+
+        <!-- 第二条 -->
+        <view class="section">
+          <text class="section-title">第二条 服务内容</text>
+
+          <view class="subsection">
+            <text class="subsection-title">2.1 服务概述</text>
+            <text class="section-content">
+              本应用是一款企业级客户关系管理（CRM）移动办公工具，旨在帮助企业提高外呼效率和客户管理水平。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">2.2 主要功能</text>
+            <view class="list-content">
+              <text class="list-item">（1）外呼管理：支持通过工作手机发起外呼，自动记录通话信息，管理通话录音；</text>
+              <text class="list-item">（2）客户管理：查看和管理客户信息，记录客户跟进情况，维护客户关系；</text>
+              <text class="list-item">（3）订单管理：查看订单状态，处理订单相关事务，跟踪订单进度；</text>
+              <text class="list-item">（4）数据统计：查看个人业绩数据、通话统计、客户分析等报表；</text>
+              <text class="list-item">（5）消息通知：接收系统消息、业务提醒、任务通知等；</text>
+              <text class="list-item">（6）设备绑定：支持工作手机与PC端系统的绑定联动；</text>
+              <text class="list-item">（7）其他企业办公相关功能。</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">2.3 使用限制</text>
+            <text class="section-content">
+              本应用仅供企业内部员工使用，需要通过企业管理员分配的账号登录使用。未经授权，任何个人或组织不得使用本应用。
+            </text>
+          </view>
+        </view>
+
+        <!-- 第三条 -->
+        <view class="section">
+          <text class="section-title">第三条 用户账号</text>
+
+          <view class="subsection">
+            <text class="subsection-title">3.1 账号获取</text>
+            <text class="section-content">
+              您的账号由企业管理员创建和分配。账号信息包括但不限于用户名、初始密码、所属部门、角色权限等。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">3.2 账号安全</text>
+            <view class="list-content">
+              <text class="list-item">（1）您应妥善保管账号和密码，不得将账号密码告知他人；</text>
+              <text class="list-item">（2）您应对账号下的所有行为负责，包括但不限于通话记录、客户操作、数据修改等；</text>
+              <text class="list-item">（3）如发现账号被盗用或存在安全风险，应立即通知企业管理员并修改密码；</text>
+              <text class="list-item">（4）因您自身原因导致账号密码泄露所造成的损失，由您自行承担。</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">3.3 账号使用规范</text>
+            <view class="list-content">
+              <text class="list-item">（1）您不得将账号转让、出借、出租给他人使用；</text>
+              <text class="list-item">（2）您不得使用他人账号登录本应用；</text>
+              <text class="list-item">（3）您不得通过任何方式获取他人账号信息。</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">3.4 账号注销</text>
+            <text class="section-content">
+              当您离职或不再需要使用本应用时，企业管理员将注销您的账号。账号注销后，您将无法继续使用本应用，相关数据将按照企业规定进行处理。
+            </text>
+          </view>
+        </view>
+
+        <!-- 第四条 -->
+        <view class="section">
+          <text class="section-title">第四条 用户行为规范</text>
+
+          <view class="subsection">
+            <text class="subsection-title">4.1 基本规范</text>
+            <text class="section-content">
+              您在使用本应用时，应遵守国家法律法规、企业规章制度以及本协议的各项规定。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">4.2 禁止行为</text>
+            <text class="section-content">您不得利用本应用从事以下行为：</text>
+            <view class="list-content">
+              <text class="list-item">（1）违反国家法律法规的行为，包括但不限于电话诈骗、非法集资、传销等；</text>
+              <text class="list-item">（2）骚扰、欺诈客户，恶意拨打骚扰电话；</text>
+              <text class="list-item">（3）泄露客户隐私信息、企业商业秘密；</text>
+              <text class="list-item">（4）传播违法、有害、淫秽、暴力等不良信息；</text>
+              <text class="list-item">（5）破坏、干扰本应用的正常运行；</text>
+              <text class="list-item">（6）利用技术手段非法获取数据或攻击系统；</text>
+              <text class="list-item">（7）其他可能损害我们、企业或第三方合法权益的行为。</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">4.3 违规处理</text>
+            <text class="section-content">
+              如您违反上述规范，我们有权采取以下措施：暂停或终止您使用本应用的权利；向企业管理员通报；配合有关部门进行调查；保留追究法律责任的权利。
+            </text>
+          </view>
+        </view>
+
+        <!-- 第五条 -->
+        <view class="section">
+          <text class="section-title">第五条 知识产权</text>
+
+          <view class="subsection">
+            <text class="subsection-title">5.1 应用知识产权</text>
+            <text class="section-content">
+              本应用的所有内容，包括但不限于文字、图片、音频、视频、软件、程序、界面设计、版面框架、图标、商标等，均受著作权法、商标法、专利法等知识产权法律法规保护，其知识产权归我们或相关权利人所有。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">5.2 使用限制</text>
+            <text class="section-content">
+              未经我们书面许可，您不得复制、修改、传播、出售、出租本应用的任何内容，不得对本应用进行反向工程、反编译或反汇编。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">5.3 业务数据归属</text>
+            <text class="section-content">
+              您在使用本应用过程中产生的业务数据（包括但不限于客户信息、订单数据、通话记录等），其所有权归属于您所在企业。
+            </text>
+          </view>
+        </view>
+
+        <!-- 第六条 -->
+        <view class="section">
+          <text class="section-title">第六条 免责声明</text>
+
+          <view class="subsection">
+            <text class="subsection-title">6.1 服务中断</text>
+            <text class="section-content">
+              因网络状况、通讯线路、系统维护升级等原因造成的服务中断或延迟，我们不承担责任，但会尽力减少对您的影响。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">6.2 不可抗力</text>
+            <text class="section-content">
+              因不可抗力（如自然灾害、战争、政府行为、法律法规变化等）导致的服务中断或无法履行本协议，我们不承担责任。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">6.3 用户原因</text>
+            <text class="section-content">
+              因您自身原因（如账号泄露、操作失误、设备故障等）造成的损失，我们不承担责任。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">6.4 第三方服务</text>
+            <text class="section-content">
+              本应用可能包含第三方服务链接或接口，我们对第三方服务的内容、安全性和行为不承担责任。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">6.5 通话内容</text>
+            <text class="section-content">
+              您使用本应用进行的通话内容和业务行为，由您自行负责。我们不对通话内容进行审核，也不对因通话内容引起的纠纷承担责任。
+            </text>
+          </view>
+        </view>
+
+        <!-- 第七条 -->
+        <view class="section">
+          <text class="section-title">第七条 协议终止</text>
+
+          <view class="subsection">
+            <text class="subsection-title">7.1 用户终止</text>
+            <text class="section-content">
+              您可以随时停止使用本应用。如需注销账号，请联系企业管理员。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">7.2 我们终止</text>
+            <text class="section-content">
+              如您违反本协议或相关法律法规，我们有权立即终止向您提供服务，无需事先通知。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">7.3 终止后果</text>
+            <text class="section-content">
+              协议终止后，您应停止使用本应用。我们有权删除您的账号和相关数据，但法律法规另有规定的除外。
+            </text>
+          </view>
+        </view>
+
+        <!-- 第八条 -->
+        <view class="section">
+          <text class="section-title">第八条 争议解决</text>
+
+          <view class="subsection">
+            <text class="subsection-title">8.1 适用法律</text>
+            <text class="section-content">
+              本协议的订立、执行、解释及争议解决均适用中华人民共和国法律（不包括港澳台地区法律）。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">8.2 争议解决方式</text>
+            <text class="section-content">
+              因本协议引起的或与本协议有关的任何争议，双方应首先通过友好协商解决。协商不成的，任何一方均可向广州仙狐网络科技有限公司所在地有管辖权的人民法院提起诉讼。
+            </text>
+          </view>
+        </view>
+
+        <!-- 第九条 -->
+        <view class="section">
+          <text class="section-title">第九条 其他条款</text>
+
+          <view class="subsection">
+            <text class="subsection-title">9.1 条款独立性</text>
+            <text class="section-content">
+              本协议的任何条款被认定为无效或不可执行，不影响其他条款的效力。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">9.2 完整协议</text>
+            <text class="section-content">
+              本协议构成您与我们之间关于使用本应用的完整协议，取代之前就同一事项达成的任何口头或书面协议。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">9.3 联系方式</text>
+            <text class="section-content">
+              如您对本协议有任何疑问，可通过以下方式联系我们：
+            </text>
+            <view class="contact-info">
+              <text class="contact-item">公司名称：广州仙狐网络科技有限公司</text>
+              <text class="contact-item">客服电话：13570727234</text>
+              <text class="contact-item">电子邮箱：xianhuquwang@163.com</text>
+              <text class="contact-item">微信客服：nxys789</text>
+              <text class="contact-item">公司地址：广州市黄埔区南翔一路68号</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 结尾 -->
+        <view class="footer-section">
+          <text class="footer-text">广州仙狐网络科技有限公司</text>
+          <text class="footer-text">2026年1月2日</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script setup lang="ts">
+</script>
+
+<style lang="scss" scoped>
+.agreement-page {
+  height: 100vh;
+  background: #fff;
+
+  .scroll-content {
+    height: 100%;
+  }
+
+  .content {
+    padding: 32rpx;
+    padding-bottom: 80rpx;
+
+    .title {
+      display: block;
+      font-size: 44rpx;
+      font-weight: bold;
+      color: #1F2937;
+      text-align: center;
+      margin-bottom: 20rpx;
+    }
+
+    .update-time {
+      display: block;
+      font-size: 24rpx;
+      color: #9CA3AF;
+      text-align: center;
+      margin-bottom: 8rpx;
+    }
+
+    .section {
+      margin-top: 48rpx;
+      margin-bottom: 32rpx;
+
+      .section-title {
+        display: block;
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #1F2937;
+        margin-bottom: 24rpx;
+        padding-bottom: 16rpx;
+        border-bottom: 2rpx solid #E5E7EB;
+      }
+
+      .section-content {
+        display: block;
+        font-size: 28rpx;
+        color: #4B5563;
+        line-height: 1.9;
+        text-align: justify;
+        margin-bottom: 16rpx;
+
+        &.intro {
+          text-indent: 2em;
+          margin-bottom: 20rpx;
+        }
+      }
+    }
+
+    .subsection {
+      margin-bottom: 28rpx;
+      padding-left: 16rpx;
+
+      .subsection-title {
+        display: block;
+        font-size: 30rpx;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 12rpx;
+      }
+    }
+
+    .list-content {
+      padding-left: 8rpx;
+
+      .list-item {
+        display: block;
+        font-size: 28rpx;
+        color: #4B5563;
+        line-height: 1.9;
+        margin-bottom: 12rpx;
+        padding-left: 16rpx;
+      }
+    }
+
+    .contact-info {
+      background: #F9FAFB;
+      padding: 24rpx;
+      border-radius: 12rpx;
+      margin-top: 16rpx;
+
+      .contact-item {
+        display: block;
+        font-size: 26rpx;
+        color: #4B5563;
+        line-height: 2;
+      }
+    }
+
+    .footer-section {
+      margin-top: 60rpx;
+      text-align: right;
+      padding-right: 32rpx;
+
+      .footer-text {
+        display: block;
+        font-size: 26rpx;
+        color: #6B7280;
+        line-height: 1.8;
+      }
+    }
+  }
+}
+</style>
+
+
+// ------------------------------------------------------------
+// 文件: src/pages/agreement/privacy-policy.vue
+// ------------------------------------------------------------
+<template>
+  <view class="agreement-page">
+    <scroll-view scroll-y class="scroll-content">
+      <view class="content">
+        <text class="title">隐私政策</text>
+        <text class="update-time">更新日期：2026年1月2日</text>
+        <text class="update-time">生效日期：2026年1月2日</text>
+
+        <!-- 引言 -->
+        <view class="section">
+          <text class="section-content intro">
+            广州仙狐网络科技有限公司（以下简称"我们"）非常重视用户的隐私保护。本《隐私政策》旨在向您说明我们如何收集、使用、存储、共享和保护您的个人信息，以及您如何管理您的个人信息。
+          </text>
+          <text class="section-content intro">
+            【特别提示】请您在使用CRM外呼助手（以下简称"本应用"）前，仔细阅读并充分理解本隐私政策的全部内容。一旦您开始使用本应用，即表示您已充分理解并同意本政策。如您不同意本政策的任何内容，请勿使用本应用。
+          </text>
+        </view>
+
+        <!-- 第一条 -->
+        <view class="section">
+          <text class="section-title">第一条 我们收集的信息</text>
+          <text class="section-content">
+            为了向您提供服务，我们可能会收集以下类型的信息：
+          </text>
+
+          <view class="subsection">
+            <text class="subsection-title">1.1 账号信息</text>
+            <view class="list-content">
+              <text class="list-item">• 用户名、密码（加密存储，我们无法获取明文密码）</text>
+              <text class="list-item">• 员工姓名、工号、所属部门</text>
+              <text class="list-item">• 职位、角色权限信息</text>
+              <text class="list-item">• 联系方式（由企业管理员录入）</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">1.2 设备信息</text>
+            <view class="list-content">
+              <text class="list-item">• 设备型号、品牌、操作系统版本</text>
+              <text class="list-item">• 设备唯一标识符（用于设备绑定和安全验证）</text>
+              <text class="list-item">• 网络状态信息（WiFi/移动网络）</text>
+              <text class="list-item">• 应用版本信息</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">1.3 通话相关信息</text>
+            <view class="list-content">
+              <text class="list-item">• 通话记录（通话时间、时长、通话状态）</text>
+              <text class="list-item">• 通话录音（需要您授权存储权限）</text>
+              <text class="list-item">• 客户电话号码（用于外呼功能）</text>
+              <text class="list-item">• 通话备注和跟进记录</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">1.4 日志信息</text>
+            <view class="list-content">
+              <text class="list-item">• 应用使用日志、操作记录</text>
+              <text class="list-item">• 错误日志（用于问题排查和服务改进）</text>
+              <text class="list-item">• 登录时间、登录IP地址</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">1.5 位置信息（可选）</text>
+            <text class="section-content">
+              仅在您明确授权后收集，用于考勤打卡、外勤签到等功能。您可以随时在系统设置中关闭位置权限。
+            </text>
+          </view>
+        </view>
+
+        <!-- 第二条 -->
+        <view class="section">
+          <text class="section-title">第二条 我们如何使用您的信息</text>
+          <text class="section-content">
+            我们收集的信息将用于以下目的：
+          </text>
+
+          <view class="subsection">
+            <text class="subsection-title">2.1 提供核心服务</text>
+            <view class="list-content">
+              <text class="list-item">• 验证您的身份，完成登录认证</text>
+              <text class="list-item">• 提供外呼、客户管理等业务功能</text>
+              <text class="list-item">• 记录和管理通话信息</text>
+              <text class="list-item">• 实现设备绑定和数据同步</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">2.2 保障服务安全</text>
+            <view class="list-content">
+              <text class="list-item">• 设备绑定和安全验证</text>
+              <text class="list-item">• 防止账号被盗用或滥用</text>
+              <text class="list-item">• 识别和防范安全风险</text>
+              <text class="list-item">• 检测和防止欺诈行为</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">2.3 改进服务质量</text>
+            <view class="list-content">
+              <text class="list-item">• 分析应用使用情况，优化功能体验</text>
+              <text class="list-item">• 排查和修复技术问题</text>
+              <text class="list-item">• 开发新功能和服务</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">2.4 企业管理需要</text>
+            <view class="list-content">
+              <text class="list-item">• 向企业管理员提供员工工作数据统计</text>
+              <text class="list-item">• 支持企业进行业务分析和决策</text>
+              <text class="list-item">• 生成业绩报表和数据分析</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 第三条 -->
+        <view class="section">
+          <text class="section-title">第三条 信息的存储与保护</text>
+
+          <view class="subsection">
+            <text class="subsection-title">3.1 存储位置</text>
+            <text class="section-content">
+              您的信息存储在企业指定的服务器上，服务器位于中华人民共和国境内。我们采用业界标准的安全措施保护数据安全。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">3.2 存储期限</text>
+            <view class="list-content">
+              <text class="list-item">• 账号信息：在您使用服务期间持续保存，账号注销后按规定删除</text>
+              <text class="list-item">• 通话记录：根据企业设置的保留期限保存，通常为1-3年</text>
+              <text class="list-item">• 通话录音：根据企业设置的保留期限保存</text>
+              <text class="list-item">• 日志信息：通常保存不超过6个月</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">3.3 安全措施</text>
+            <view class="list-content">
+              <text class="list-item">• 数据传输采用HTTPS/SSL加密</text>
+              <text class="list-item">• 敏感信息（如密码）采用不可逆加密存储</text>
+              <text class="list-item">• 实施严格的访问控制，限制数据访问权限</text>
+              <text class="list-item">• 定期进行安全评估和漏洞修复</text>
+              <text class="list-item">• 建立数据备份和灾难恢复机制</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 第四条 -->
+        <view class="section">
+          <text class="section-title">第四条 信息的共享与披露</text>
+          <text class="section-content">
+            我们不会向第三方出售您的个人信息。在以下情况下，我们可能会共享您的信息：
+          </text>
+
+          <view class="subsection">
+            <text class="subsection-title">4.1 企业内部共享</text>
+            <view class="list-content">
+              <text class="list-item">• 向您所在企业的管理员提供必要的工作数据</text>
+              <text class="list-item">• 在企业内部进行业务协作时共享相关信息</text>
+              <text class="list-item">• 生成团队业绩报表时使用汇总数据</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">4.2 法律要求</text>
+            <view class="list-content">
+              <text class="list-item">• 根据法律法规的强制性要求</text>
+              <text class="list-item">• 响应政府部门的合法要求</text>
+              <text class="list-item">• 为保护我们、用户或公众的合法权益</text>
+              <text class="list-item">• 配合司法机关的调查取证</text>
+            </view>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">4.3 第三方服务</text>
+            <text class="section-content">
+              使用第三方云服务存储数据时，我们会确保其具备相应的安全保障能力，并签署数据保护协议。使用第三方通信服务时，仅共享必要的信息。
+            </text>
+          </view>
+        </view>
+
+        <!-- 第五条 -->
+        <view class="section">
+          <text class="section-title">第五条 您的权利</text>
+          <text class="section-content">
+            根据相关法律法规，您对您的个人信息享有以下权利：
+          </text>
+
+          <view class="subsection">
+            <text class="subsection-title">5.1 访问权</text>
+            <text class="section-content">
+              您可以查看您的账号信息、通话记录等个人数据。如需获取更多信息，可联系企业管理员。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">5.2 更正权</text>
+            <text class="section-content">
+              如发现您的个人信息有误，可联系企业管理员进行更正。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">5.3 删除权</text>
+            <text class="section-content">
+              您可以请求删除您的个人信息，但可能受到法律法规和企业规定的限制。某些信息可能因合规要求需要保留一定期限。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">5.4 撤回同意</text>
+            <text class="section-content">
+              您可以随时撤回对本隐私政策的同意，但这可能导致您无法继续使用本应用的部分或全部功能。
+            </text>
+          </view>
+
+          <view class="subsection">
+            <text class="subsection-title">5.5 注销账号</text>
+            <text class="section-content">
+              当您离职或不再需要使用本应用时，可联系企业管理员注销账号。账号注销后，我们将按规定删除或匿名化处理您的个人信息。
+            </text>
+          </view>
+        </view>
+
+        <!-- 第六条 -->
+        <view class="section">
+          <text class="section-title">第六条 权限申请说明</text>
+          <text class="section-content">
+            本应用可能需要申请以下系统权限，我们承诺仅在必要时使用这些权限：
+          </text>
+
+          <view class="permission-table">
+            <view class="permission-item">
+              <text class="permission-name">📞 电话权限</text>
+              <text class="permission-desc">用途：发起外呼、获取通话状态</text>
+              <text class="permission-required">必要性：核心功能必需</text>
+            </view>
+
+            <view class="permission-item">
+              <text class="permission-name">🎙️ 麦克风权限</text>
+              <text class="permission-desc">用途：通话录音功能</text>
+              <text class="permission-required">必要性：录音功能必需，可选择不授权</text>
+            </view>
+
+            <view class="permission-item">
+              <text class="permission-name">📁 存储权限</text>
+              <text class="permission-desc">用途：保存录音文件、缓存数据</text>
+              <text class="permission-required">必要性：部分功能必需</text>
+            </view>
+
+            <view class="permission-item">
+              <text class="permission-name">🌐 网络权限</text>
+              <text class="permission-desc">用途：与服务器通信、同步数据</text>
+              <text class="permission-required">必要性：核心功能必需</text>
+            </view>
+
+            <view class="permission-item">
+              <text class="permission-name">🔔 通知权限</text>
+              <text class="permission-desc">用途：接收消息推送、来电提醒</text>
+              <text class="permission-required">必要性：消息功能必需，可选择不授权</text>
+            </view>
+
+            <view class="permission-item">
+              <text class="permission-name">📷 相机权限</text>
+              <text class="permission-desc">用途：扫描二维码绑定设备</text>
+              <text class="permission-required">必要性：扫码功能必需，可选择不授权</text>
+            </view>
+          </view>
+
+          <text class="section-content">
+            您可以在手机系统设置中随时管理这些权限。关闭某些权限可能导致相关功能无法正常使用。
+          </text>
+        </view>
+
+        <!-- 第七条 -->
+        <view class="section">
+          <text class="section-title">第七条 未成年人保护</text>
+          <text class="section-content">
+            本应用为企业办公应用，不面向未成年人提供服务。如果我们发现在未经监护人同意的情况下收集了未成年人的个人信息，我们将尽快删除相关信息。如果您是未成年人的监护人，发现被监护人使用了本应用，请及时联系我们。
+          </text>
+        </view>
+
+        <!-- 第八条 -->
+        <view class="section">
+          <text class="section-title">第八条 隐私政策的更新</text>
+          <text class="section-content">
+            我们可能会根据法律法规变化、业务发展需要等原因更新本隐私政策。更新后的政策将在本应用内公布，重大变更时我们会通过应用内通知、弹窗提示等方式告知您。
+          </text>
+          <text class="section-content">
+            建议您定期查阅本隐私政策，以了解我们如何保护您的信息。如您在政策更新后继续使用本应用，即表示您同意更新后的政策。
+          </text>
+        </view>
+
+        <!-- 第九条 -->
+        <view class="section">
+          <text class="section-title">第九条 联系我们</text>
+          <text class="section-content">
+            如果您对本隐私政策有任何疑问、意见或建议，或需要行使您的个人信息权利，可以通过以下方式联系我们：
+          </text>
+          <view class="contact-info">
+            <text class="contact-item">公司名称：广州仙狐网络科技有限公司</text>
+            <text class="contact-item">客服电话：13570727234</text>
+            <text class="contact-item">电子邮箱：xianhuquwang@163.com</text>
+            <text class="contact-item">微信客服：nxys789</text>
+            <text class="contact-item">公司地址：广州市黄埔区南翔一路68号</text>
+          </view>
+          <text class="section-content">
+            我们将在收到您的反馈后15个工作日内回复。
+          </text>
+        </view>
+
+        <!-- 结尾 -->
+        <view class="footer-section">
+          <text class="footer-text">广州仙狐网络科技有限公司</text>
+          <text class="footer-text">2026年1月2日</text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script setup lang="ts">
+</script>
+
+<style lang="scss" scoped>
+.agreement-page {
+  height: 100vh;
+  background: #fff;
+
+  .scroll-content {
+    height: 100%;
+  }
+
+  .content {
+    padding: 32rpx;
+    padding-bottom: 80rpx;
+
+    .title {
+      display: block;
+      font-size: 44rpx;
+      font-weight: bold;
+      color: #1F2937;
+      text-align: center;
+      margin-bottom: 20rpx;
+    }
+
+    .update-time {
+      display: block;
+      font-size: 24rpx;
+      color: #9CA3AF;
+      text-align: center;
+      margin-bottom: 8rpx;
+    }
+
+    .section {
+      margin-top: 48rpx;
+      margin-bottom: 32rpx;
+
+      .section-title {
+        display: block;
+        font-size: 34rpx;
+        font-weight: bold;
+        color: #1F2937;
+        margin-bottom: 24rpx;
+        padding-bottom: 16rpx;
+        border-bottom: 2rpx solid #E5E7EB;
+      }
+
+      .section-content {
+        display: block;
+        font-size: 28rpx;
+        color: #4B5563;
+        line-height: 1.9;
+        text-align: justify;
+        margin-bottom: 16rpx;
+
+        &.intro {
+          text-indent: 2em;
+          margin-bottom: 20rpx;
+        }
+      }
+    }
+
+    .subsection {
+      margin-bottom: 28rpx;
+      padding-left: 16rpx;
+
+      .subsection-title {
+        display: block;
+        font-size: 30rpx;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 12rpx;
+      }
+    }
+
+    .list-content {
+      padding-left: 8rpx;
+
+      .list-item {
+        display: block;
+        font-size: 28rpx;
+        color: #4B5563;
+        line-height: 1.9;
+        margin-bottom: 10rpx;
+        padding-left: 16rpx;
+      }
+    }
+
+    .permission-table {
+      background: #F9FAFB;
+      border-radius: 12rpx;
+      padding: 16rpx;
+      margin: 20rpx 0;
+
+      .permission-item {
+        padding: 20rpx;
+        border-bottom: 1rpx solid #E5E7EB;
+
+        &:last-child {
+          border-bottom: none;
+        }
+
+        .permission-name {
+          display: block;
+          font-size: 28rpx;
+          font-weight: 600;
+          color: #1F2937;
+          margin-bottom: 8rpx;
+        }
+
+        .permission-desc {
+          display: block;
+          font-size: 26rpx;
+          color: #4B5563;
+          margin-bottom: 4rpx;
+        }
+
+        .permission-required {
+          display: block;
+          font-size: 24rpx;
+          color: #6B7280;
+        }
+      }
+    }
+
+    .contact-info {
+      background: #F9FAFB;
+      padding: 24rpx;
+      border-radius: 12rpx;
+      margin: 16rpx 0;
+
+      .contact-item {
+        display: block;
+        font-size: 26rpx;
+        color: #4B5563;
+        line-height: 2;
+      }
+    }
+
+    .footer-section {
+      margin-top: 60rpx;
+      text-align: right;
+      padding-right: 32rpx;
+
+      .footer-text {
+        display: block;
+        font-size: 26rpx;
+        color: #6B7280;
+        line-height: 1.8;
+      }
+    }
+  }
+}
+</style>
+
